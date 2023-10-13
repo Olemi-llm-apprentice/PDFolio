@@ -1,17 +1,29 @@
 import streamlit as st
-import PyPDF2
-from pdf2image import convert_from_path
+import fitz  # PyMuPDF
 from PIL import Image, ImageDraw, ImageFont
+import tempfile
 
 # StreamlitアプリのUI
 st.title("PDF Thumbnail Generator")
+
+def pdf_to_image(pdf_path, page_number):
+    pdf = fitz.open(pdf_path)
+    page = pdf.load_page(page_number)
+    pix = page.get_pixmap()
+    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+    return img
 
 uploaded_files = st.file_uploader("PDFファイルをアップロード", type=["pdf"], accept_multiple_files=True)
 
 if uploaded_files:
     for uploaded_file in uploaded_files:
-        pdf_reader = PyPDF2.PdfFileReader(uploaded_file)
-        num_pages = pdf_reader.getNumPages()
+        # 一時ファイルを作成
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(uploaded_file.read())
+            temp_file_path = temp_file.name
+
+        pdf_reader = fitz.open(temp_file_path)
+        num_pages = len(pdf_reader)
 
         for start_page in range(0, num_pages, 8):  # A4には最大8ページ分のサムネイルを配置
             a4_img = Image.new("RGB", (595 * 2, 842 * 4), color="white")
@@ -22,8 +34,7 @@ if uploaded_files:
                 if current_page >= num_pages:
                     break
 
-                images = convert_from_path(uploaded_file, first_page=current_page + 1, last_page=current_page + 1)
-                img = images[0]
+                img = pdf_to_image(temp_file_path, current_page)
 
                 x_offset = (i % 2) * 595
                 y_offset = (i // 2) * 421
